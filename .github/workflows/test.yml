@@ -1,0 +1,28 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: "cargo test"
+    runs-on: ubuntu-24.04
+
+    # gmime is not in the runner image, and the version in 24.04 is older than
+    # what the bindings expect.
+    container:
+      image: ubuntu:26.04
+
+    steps:
+      - name: install dependencies
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
+            build-essential ca-certificates cargo git libgmime-3.0-dev pkg-config rustc
+
+      - uses: actions/checkout@v6
+
+      - name: cargo test
+        run: cargo test
