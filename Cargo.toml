@@ -1,0 +1,25 @@
+[package]
+name = "mailviewer-core"
+version = "0.1.0"
+edition = "2021"
+authors = ["Alexandre Del Bigio"]
+description = "Reading and sanitizing of eml and Outlook msg files, without a toolkit"
+readme = "README.md"
+repository = "https://github.com/alescdb/mailviewer-core"
+license = "GPL-3.0+"
+
+[dependencies]
+ammonia = "4.1.4"
+base64 = "0.23.1"
+ctor = "1.0.13"
+dtor = "1.0.6"
+encoding_rs = "0.8.35"
+futures-util = "0.3.34"
+gio = "0.22"
+glib = { version = "0.22", features = ["v2_66"] }
+gmime = "0.8.1"
+hex = "0.4.3"
+lazy_static = "1.5.0"
+log = "0.4.33"
+msg_parser = "0.3.6"
+uuid = { version = "1.24.1", features = ["v4"] }
