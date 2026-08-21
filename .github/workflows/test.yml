@@ -11,7 +11,8 @@ jobs:
     runs-on: ubuntu-24.04
 
     # gmime is not in the runner image, and the version in 24.04 is older than
-    # what the bindings expect.
+    # what the bindings expect. shared-mime-info is what lets gio tell an eml
+    # from a msg; without it those tests see text/plain.
     container:
       image: ubuntu:26.04
 
@@ -20,7 +21,8 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
-            build-essential ca-certificates cargo git libgmime-3.0-dev pkg-config rustc
+            build-essential ca-certificates cargo git libgmime-3.0-dev pkg-config rustc \
+            shared-mime-info
 
       - uses: actions/checkout@v6
 
