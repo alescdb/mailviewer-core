@@ -8,7 +8,7 @@ on:
           required: false
           default: "main"
 jobs:
-  test-mailviewer:
+  mailviewer:
     runs-on: ubuntu-24.04
 
     container:
