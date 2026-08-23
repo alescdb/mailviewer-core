@@ -1,0 +1,43 @@
+name: mailviewer
+on:
+  pull_request:
+jobs:
+  test-mailviewer:
+    runs-on: ubuntu-24.04
+
+    container:
+      image: ubuntu:26.04
+
+    steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential cargo git pkg-config \
+            libadwaita-1-dev libgmime-3.0-dev \
+            libwebkitgtk-6.0-dev blueprint-compiler
+
+      - name: Checkout MailViewer
+        uses: actions/checkout@v6
+        with:
+          repository: alescdb/mailviewer
+          ref: main
+          path: app
+
+      - name: Checkout Core PR
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: core
+
+      - name: Use local core checkout
+        working-directory: app
+        run: |
+          printf '\n[patch."https://github.com/alescdb/mailviewer-core"]\nmailviewer-core = { path = "../core" }\n' >> Cargo.toml
+
+      - name: Test Core
+        run: cargo test --manifest-path core/Cargo.toml
+
+      - name: Test MailViewer
+        run: cargo test --manifest-path app/Cargo.toml
