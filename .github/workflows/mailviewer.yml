@@ -1,6 +1,12 @@
 name: mailviewer
 on:
   pull_request:
+  workflow_dispatch:
+      inputs:
+        mailviewer_ref:
+          description: "mailviewer test"
+          required: false
+          default: "main"
 jobs:
   test-mailviewer:
     runs-on: ubuntu-24.04
