@@ -25,7 +25,7 @@ use msg_parser::Outlook;
 
 use super::attachment::Attachment;
 use super::message::Message;
-use crate::message::message::MessageParser;
+use crate::message::message::{MessageParser, Protection};
 
 #[derive(Debug, Default, Clone)]
 pub struct OutlookMessage {
@@ -153,6 +153,12 @@ impl Message for OutlookMessage {
 
   fn body_html(&self) -> Option<String> {
     self.html.clone()
+  }
+
+  fn protection(&self) -> Protection {
+    // Outlook keeps a signed or encrypted message as an attached blob rather
+    // than in the mime structure, so nothing is claimed here.
+    Protection::None
   }
 
   fn body_text(&self) -> Option<String> {
