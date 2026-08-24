@@ -55,6 +55,17 @@ lazy_static! {
   };
 }
 
+/// What a message says about itself before any key is involved. Reading the
+/// content of a protected message is a different matter, this is only what the
+/// structure of the message states.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Protection {
+  #[default]
+  None,
+  Signed,
+  Encrypted,
+}
+
 pub trait Message {
   fn parse(&mut self, cancellable: Option<&gio::Cancellable>) -> Result<(), Box<dyn Error>>;
   fn from(&self) -> String;
@@ -64,6 +75,7 @@ pub trait Message {
   fn attachments(&self) -> Vec<Attachment>;
   fn body_html(&self) -> Option<String>;
   fn body_text(&self) -> Option<String>;
+  fn protection(&self) -> Protection;
 }
 
 #[derive(PartialEq, Debug)]
@@ -239,6 +251,10 @@ impl Message for MessageParser {
 
   fn body_text(&self) -> Option<String> {
     self.parser.body_text()
+  }
+
+  fn protection(&self) -> Protection {
+    self.parser.protection()
   }
 }
 
