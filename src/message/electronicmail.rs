@@ -23,14 +23,16 @@ use encoding_rs::Encoding;
 use gio::prelude::*;
 use gmime::prelude::Cast;
 use gmime::traits::{
-  ContentTypeExt, DataWrapperExt, MessageExt, ObjectExt, ParserExt, PartExt, StreamExt, StreamMemExt
+  ContentTypeExt, DataWrapperExt, MessageExt, ObjectExt, ParserExt, PartExt, StreamExt,
+  StreamMemExt,
 };
 use gmime::{
-  glib, InternetAddressExt, InternetAddressList, InternetAddressListExt, Message, Parser, Part, StreamMem
+  glib, InternetAddressExt, InternetAddressList, InternetAddressListExt, Message, Parser, Part,
+  StreamMem,
 };
 
 use crate::message::attachment::Attachment;
-use crate::message::message::MessageParser;
+use crate::message::message::{MessageParser, Protection};
 
 #[allow(unused_variables, dead_code)]
 const O_RDONLY: i32 = 0;
@@ -53,6 +55,7 @@ pub struct ElectronicMail {
   pub body_html: Option<String>,
   pub body_text: Option<String>,
   pub attachments: Vec<Attachment>,
+  pub protection: Protection,
 }
 
 impl ElectronicMail {
@@ -66,6 +69,7 @@ impl ElectronicMail {
       body_text: None,
       date: None,
       attachments: vec![],
+      protection: Protection::default(),
     }
   }
 
@@ -105,10 +109,52 @@ impl ElectronicMail {
     addresses.join(", ")
   }
 
+  /// What the structure of the message says about itself, without touching a
+  /// key: the wrapper of RFC 1847 for PGP/MIME and S/MIME, and the armor of
+  /// RFC 4880 for the older style that puts the block in the body.
+  fn part_protection(content_type: &gmime::ContentType) -> Option<Protection> {
+    if content_type.is_type("multipart", "encrypted") {
+      return Some(Protection::Encrypted);
+    }
+    if content_type.is_type("multipart", "signed") {
+      return Some(Protection::Signed);
+    }
+    // S/MIME puts everything in one part and says which in a parameter.
+    if content_type.is_type("application", "pkcs7-mime")
+      || content_type.is_type("application", "x-pkcs7-mime")
+    {
+      return match content_type.parameter("smime-type").as_deref() {
+        Some("signed-data") => Some(Protection::Signed),
+        // enveloped-data, authenveloped-data, or nothing said.
+        _ => Some(Protection::Encrypted),
+      };
+    }
+    None
+  }
+
+  fn inline_protection(body: &str) -> Option<Protection> {
+    let body = body.trim_start();
+    if body.starts_with("-----BEGIN PGP MESSAGE-----") {
+      return Some(Protection::Encrypted);
+    }
+    if body.starts_with("-----BEGIN PGP SIGNED MESSAGE-----") {
+      return Some(Protection::Signed);
+    }
+    None
+  }
+
   fn parse_body(&mut self, message: &Message) {
     let mut html: Option<String> = None;
     message.foreach(|_, current| {
       log::debug!("part() => {:?}", current.content_id());
+      if let Some(content_type) = current.content_type() {
+        if let Some(found) = Self::part_protection(&content_type) {
+          // Encrypted wins: what is inside is not readable from here anyway.
+          if found == Protection::Encrypted || self.protection == Protection::None {
+            self.protection = found;
+          }
+        }
+      }
       if let Some(part) = current.dynamic_cast_ref::<Part>() {
         if part.is_attachment() {
           self.add_attachment(part);
@@ -126,6 +172,11 @@ impl ElectronicMail {
         }
       }
     });
+    if self.protection == Protection::None {
+      if let Some(found) = self.body_text.as_deref().and_then(Self::inline_protection) {
+        self.protection = found;
+      }
+    }
     if let Some(html) = html {
       self.body_html = Some(html);
       // for debugging parsed html
@@ -300,6 +351,10 @@ impl super::message::Message for ElectronicMail {
     self.body_html.clone()
   }
 
+  fn protection(&self) -> Protection {
+    self.protection
+  }
+
   fn body_text(&self) -> Option<String> {
     self.body_text.clone()
   }
@@ -313,7 +368,7 @@ mod tests {
   use gio::prelude::*;
 
   use crate::message::electronicmail::ElectronicMail;
-  use crate::message::message::Message;
+  use crate::message::message::{Message, Protection};
   use crate::utils;
 
   fn assert_local_date(date: &str) {
@@ -389,6 +444,46 @@ mod tests {
 
     Ok(())
   }
+  fn protection_of(path: &str) -> Result<Protection, Box<dyn Error>> {
+    let mut parser = ElectronicMail::new(fs::read(path).unwrap());
+    parser.parse(None)?;
+    Ok(parser.protection())
+  }
+
+  #[test]
+  fn reports_pgp_mime_messages() -> Result<(), Box<dyn Error>> {
+    assert_eq!(
+      protection_of("tests/pgp-encrypted.eml")?,
+      Protection::Encrypted
+    );
+    assert_eq!(protection_of("tests/pgp-signed.eml")?, Protection::Signed);
+
+    Ok(())
+  }
+
+  #[test]
+  fn reports_pgp_written_into_the_body() -> Result<(), Box<dyn Error>> {
+    assert_eq!(
+      protection_of("tests/pgp-inline-encrypted.eml")?,
+      Protection::Encrypted
+    );
+    assert_eq!(
+      protection_of("tests/pgp-inline-signed.eml")?,
+      Protection::Signed
+    );
+
+    Ok(())
+  }
+
+  #[test]
+  fn says_nothing_about_a_plain_message() -> Result<(), Box<dyn Error>> {
+    assert_eq!(protection_of("tests/html.eml")?, Protection::None);
+    assert_eq!(protection_of("tests/text.eml")?, Protection::None);
+    assert_eq!(protection_of("tests/test-google.eml")?, Protection::None);
+
+    Ok(())
+  }
+
   #[test]
   fn test_sample_html() -> Result<(), Box<dyn Error>> {
     let mut parser = ElectronicMail::new(fs::read("tests/html.eml").unwrap());
