@@ -123,7 +123,7 @@ impl Message for OutlookMessage {
       self.attachments.push(Attachment {
         filename: Self::clean_string(att.file_name.clone()),
         content_id: Self::clean_string(att.file_name.clone()), // Uuid::new_v4().simple().to_string(),
-        body: hex::decode(&att.payload)?,
+        body: std::sync::Arc::from(hex::decode(&att.payload)?.as_slice()),
         mime_type: Some(att.mime_tag.clone()),
       });
     }
