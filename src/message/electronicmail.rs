@@ -283,10 +283,18 @@ impl ElectronicMail {
         attachment.filename
       );
       self.attachments.push(attachment);
-    } else {
+    } else if part.filename().is_some() {
       log::error!(
         "add_attachment() => no attachment => {:?}",
         part.content_id()
+      );
+    } else {
+      // A part with no file name is not something we failed to read: the
+      // version part of a PGP/MIME envelope is one, and every message that
+      // carries one used to log an error saying so.
+      log::debug!(
+        "add_attachment() => a part with nothing to save => {:?}",
+        part.content_type().and_then(|t| t.mime_type())
       );
     }
   }
@@ -448,6 +456,19 @@ mod tests {
     let mut parser = ElectronicMail::new(fs::read(path).unwrap());
     parser.parse(None)?;
     Ok(parser.protection())
+  }
+
+  #[test]
+  fn keeps_only_the_part_worth_saving() -> Result<(), Box<dyn Error>> {
+    let mut parser = ElectronicMail::new(fs::read("tests/pgp-encrypted.eml").unwrap());
+    parser.parse(None)?;
+
+    // The envelope carries two parts, and only one of them is a file: the
+    // other says which version of the protocol this is.
+    assert_eq!(parser.attachments.len(), 1);
+    assert_eq!(parser.attachments[0].filename, "encrypted.asc");
+
+    Ok(())
   }
 
   #[test]
