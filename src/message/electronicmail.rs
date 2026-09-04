@@ -50,6 +50,8 @@ pub struct ElectronicMail {
   data: Vec<u8>,
   pub from: String,
   pub to: String,
+  pub cc: String,
+  pub bcc: String,
   pub date: Option<gmime::DateTime>,
   pub subject: String,
   pub body_html: Option<String>,
@@ -64,6 +66,8 @@ impl ElectronicMail {
       data,
       from: String::new(),
       to: String::new(),
+      cc: String::new(),
+      bcc: String::new(),
       subject: String::new(),
       body_html: None,
       body_text: None,
@@ -73,27 +77,14 @@ impl ElectronicMail {
     }
   }
 
-  fn merge_to(&self, message: &Message) -> InternetAddressList {
-    let list = InternetAddressList::new();
-
-    if let Some(to) = message.to() {
-      for i in 0..to.length() {
-        list.add(&to.address(i).unwrap());
-      }
+  /// A recipient in Bcc was hidden from everyone else, and a recipient in Cc
+  /// was not addressed directly. Neither is a To, so neither is folded into
+  /// it.
+  fn addresses(&self, list: Option<InternetAddressList>) -> String {
+    match list {
+      Some(list) => self.internet_list(&list),
+      None => String::new(),
     }
-
-    if let Some(cc) = message.cc() {
-      for i in 0..cc.length() {
-        list.add(&cc.address(i).unwrap());
-      }
-    }
-
-    if let Some(bcc) = message.bcc() {
-      for i in 0..bcc.length() {
-        list.add(&bcc.address(i).unwrap());
-      }
-    }
-    list
   }
 
   fn internet_list(&self, list: &InternetAddressList) -> String {
@@ -311,7 +302,9 @@ impl super::message::Message for ElectronicMail {
       if let Some(from) = &eml.from() {
         self.from = self.internet_list(from);
       }
-      self.to = self.internet_list(&self.merge_to(eml));
+      self.to = self.addresses(eml.to());
+      self.cc = self.addresses(eml.cc());
+      self.bcc = self.addresses(eml.bcc());
       if let Some(subject) = &eml.subject() {
         self.subject = subject.to_string();
       }
@@ -345,6 +338,14 @@ impl super::message::Message for ElectronicMail {
 
   fn attachments(&self) -> Vec<Attachment> {
     self.attachments.clone()
+  }
+
+  fn cc(&self) -> String {
+    self.cc.clone()
+  }
+
+  fn bcc(&self) -> String {
+    self.bcc.clone()
   }
 
   fn body_html(&self) -> Option<String> {
@@ -448,6 +449,21 @@ mod tests {
     let mut parser = ElectronicMail::new(fs::read(path).unwrap());
     parser.parse(None)?;
     Ok(parser.protection())
+  }
+
+  #[test]
+  fn keeps_the_recipients_apart() -> Result<(), Box<dyn Error>> {
+    let mut parser = ElectronicMail::new(fs::read("tests/recipients.eml").unwrap());
+    parser.parse(None)?;
+
+    assert_eq!(parser.to(), "Lucas <lucas@mercure.space>");
+    assert_eq!(parser.cc(), "Marie <marie@venus.space>");
+    assert_eq!(parser.bcc(), "Quiet One <quiet@pluto.space>");
+    // The one that matters: someone in blind copy does not turn up as a
+    // recipient everyone could see.
+    assert!(!parser.to().contains("quiet@pluto.space"));
+
+    Ok(())
   }
 
   #[test]

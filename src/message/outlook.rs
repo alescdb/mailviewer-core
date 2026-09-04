@@ -139,6 +139,16 @@ impl Message for OutlookMessage {
     self.to.clone()
   }
 
+  fn cc(&self) -> String {
+    // The reader of a .msg gets one list of recipients out of the file, with
+    // nothing saying who was in copy.
+    String::new()
+  }
+
+  fn bcc(&self) -> String {
+    String::new()
+  }
+
   fn subject(&self) -> String {
     self.subject.clone()
   }

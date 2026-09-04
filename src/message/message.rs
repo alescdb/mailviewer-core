@@ -70,6 +70,8 @@ pub trait Message {
   fn parse(&mut self, cancellable: Option<&gio::Cancellable>) -> Result<(), Box<dyn Error>>;
   fn from(&self) -> String;
   fn to(&self) -> String;
+  fn cc(&self) -> String;
+  fn bcc(&self) -> String;
   fn subject(&self) -> String;
   fn date(&self) -> String;
   fn attachments(&self) -> Vec<Attachment>;
@@ -231,6 +233,14 @@ impl Message for MessageParser {
 
   fn to(&self) -> String {
     self.parser.to()
+  }
+
+  fn cc(&self) -> String {
+    self.parser.cc()
+  }
+
+  fn bcc(&self) -> String {
+    self.parser.bcc()
   }
 
   fn subject(&self) -> String {
