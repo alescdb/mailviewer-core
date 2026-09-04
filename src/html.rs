@@ -282,7 +282,7 @@ impl Html {
     let date = Self::escape(date);
     let subject = Self::escape(subject);
     let policy = self.policy();
-    let content = self.clean().to_string();
+    let content = self.clean();
     let attachments = Self::print_attachment_list(attachments);
 
     format!(
