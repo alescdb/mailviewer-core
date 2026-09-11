@@ -141,7 +141,7 @@ impl Html {
           let mime_type = attachment.mime_type.as_deref()?;
           Some((matched_content_id, InlineImage {
             mime_type: mime_type.to_string(),
-            body: Arc::from(attachment.body.as_slice()),
+            body: attachment.body.clone(),
           }))
         })
         .collect()
@@ -338,6 +338,7 @@ fn content_id_of(value: &str) -> Option<&str> {
 mod tests {
   use std::error::Error;
   use std::fs;
+  use std::sync::Arc;
 
   use crate::html::Html;
   use crate::message::message::{Message, MessageParser};
@@ -490,7 +491,7 @@ mod tests {
     crate::message::attachment::Attachment {
       filename: format!("{content_id}.bin"),
       content_id: content_id.to_string(),
-      body: vec![1, 2, 3],
+      body: Arc::from(&[1u8, 2, 3][..]),
       mime_type: Some(mime_type.to_string()),
     }
   }
@@ -516,7 +517,7 @@ mod tests {
     let attachment = crate::message::attachment::Attachment {
       filename: "image.png".to_string(),
       content_id: "ii_m2lqbrhv0".to_string(),
-      body: vec![1, 2, 3],
+      body: Arc::from(&[1u8, 2, 3][..]),
       mime_type: Some("image/png".to_string()),
     };
     let html = Html::new("<pre>cid:ii_m2lqbrhv0</pre>", false).inline_images(&[attachment]);
@@ -530,7 +531,7 @@ mod tests {
     let attachment = crate::message::attachment::Attachment {
       filename: "image.png".to_string(),
       content_id: "ii_m2lqbrhv0".to_string(),
-      body: vec![1, 2, 3],
+      body: Arc::from(&[1u8, 2, 3][..]),
       mime_type: Some("image/png".to_string()),
     };
     let body = Html::new("<img src=\"CID:II_M2LQBRHV0\">", false)
@@ -585,7 +586,7 @@ mod tests {
     crate::message::attachment::Attachment {
       filename: filename.to_string(),
       content_id: String::new(),
-      body: vec![],
+      body: Arc::from(&b""[..]),
       mime_type: mime_type.map(String::from),
     }
   }
@@ -651,7 +652,7 @@ mod tests {
     let attachment = crate::message::attachment::Attachment {
       filename: "image.png".to_string(),
       content_id: "foo4%foo1@bar.net".to_string(),
-      body: vec![1, 2, 3],
+      body: Arc::from(&[1u8, 2, 3][..]),
       mime_type: Some("image/png".to_string()),
     };
 

@@ -18,6 +18,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 use std::error::Error;
+use std::sync::Arc;
 use std::fmt;
 
 use gio::prelude::*;
@@ -30,7 +31,10 @@ const DEFAULT_FILENAME: &str = "attachment";
 pub struct Attachment {
   pub filename: String,
   pub content_id: String,
-  pub body: Vec<u8>,
+  /// Shared rather than owned: the list of attachments is handed out on every
+  /// render, and copying the bytes of every one of them each time is what a
+  /// 10 MB attachment used to cost, three times over.
+  pub body: Arc<[u8]>,
   pub mime_type: Option<String>,
 }
 
@@ -74,7 +78,7 @@ impl Attachment {
 
     let output_stream = io_stream.output_stream();
     let write_res = output_stream
-      .write_future(glib::Bytes::from(&self.body), glib::Priority::DEFAULT)
+      .write_future(glib::Bytes::from(&self.body[..]), glib::Priority::DEFAULT)
       .await;
 
     io_stream.close_future(glib::Priority::default()).await?;
@@ -142,7 +146,7 @@ mod tests {
     Attachment {
       filename: filename.to_string(),
       content_id: String::new(),
-      body: vec![],
+      body: Arc::from(&b""[..]),
       mime_type: None,
     }
   }
@@ -157,7 +161,7 @@ mod tests {
 
     let file = gio::File::for_path(&path);
     let mut attachment = attachment("small.bin");
-    attachment.body = b"BBBB".to_vec();
+    attachment.body = Arc::from(&b"BBBB"[..]);
 
     utils::spawn_and_wait_new_ctx(async move {
       attachment.write_to_file(&file).await.unwrap();

@@ -209,7 +209,7 @@ impl ElectronicMail {
         if let Some(content) = part.content() {
           let stream = StreamMem::new();
           content.write_to_stream(&stream);
-          let body = stream.byte_array().unwrap().to_vec();
+          let body = std::sync::Arc::from(stream.byte_array().unwrap().as_ref());
           stream.close();
 
           return Some(Attachment {
