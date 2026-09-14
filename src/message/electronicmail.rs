@@ -23,8 +23,8 @@ use encoding_rs::Encoding;
 use gio::prelude::*;
 use gmime::prelude::Cast;
 use gmime::traits::{
-  ContentTypeExt, DataWrapperExt, MessageExt, ObjectExt, ParserExt, PartExt, StreamExt,
-  StreamMemExt,
+  ContentTypeExt, DataWrapperExt, HeaderExt, HeaderListExt, MessageExt, ObjectExt, ParserExt,
+  PartExt, StreamExt, StreamMemExt,
 };
 use gmime::{
   glib, InternetAddressExt, InternetAddressList, InternetAddressListExt, Message, Parser, Part,
@@ -32,6 +32,7 @@ use gmime::{
 };
 
 use crate::message::attachment::Attachment;
+use crate::message::headers::Header;
 use crate::message::message::{MessageParser, Protection};
 
 #[allow(unused_variables, dead_code)]
@@ -56,6 +57,7 @@ pub struct ElectronicMail {
   pub body_text: Option<String>,
   pub attachments: Vec<Attachment>,
   pub protection: Protection,
+  pub headers: Vec<Header>,
 }
 
 impl ElectronicMail {
@@ -70,6 +72,7 @@ impl ElectronicMail {
       date: None,
       attachments: vec![],
       protection: Protection::default(),
+      headers: vec![],
     }
   }
 
@@ -182,6 +185,23 @@ impl ElectronicMail {
       // for debugging parsed html
       // self.write_debug_html();
     }
+  }
+
+  fn parse_headers(&self, message: &Message) -> Vec<Header> {
+    let mut headers = Vec::new();
+    if let Some(header_list) = message.header_list() {
+      for index in 0..header_list.count() {
+        if let Some(header) = header_list.header_at(index) {
+          if let (Some(name), Some(value)) = (header.name(), header.value()) {
+            headers.push(Header {
+              name: name.into(),
+              value: value.into(),
+            });
+          }
+        }
+      }
+    }
+    headers
   }
 
   #[allow(dead_code)]
@@ -324,6 +344,7 @@ impl super::message::Message for ElectronicMail {
         self.subject = subject.to_string();
       }
       self.date = ElectronicMail::my_mime_message_get_date(eml);
+      self.headers = self.parse_headers(eml);
       self.parse_body(eml);
     }
     stream.close();
@@ -366,6 +387,10 @@ impl super::message::Message for ElectronicMail {
   fn body_text(&self) -> Option<String> {
     self.body_text.clone()
   }
+
+  fn headers(&self) -> Vec<Header> {
+    self.headers.clone()
+  }
 }
 
 #[cfg(test)]
@@ -399,6 +424,7 @@ mod tests {
     assert_eq!(parser.from, "John Doe <john@moon.space>");
     assert_eq!(parser.to, "Lucas <lucas@mercure.space>");
     assert_eq!(parser.subject, "Lorem ipsum");
+    assert!(parser.headers.iter().any(|header| header.name == "Subject"));
     assert_local_date(&parser.date());
     assert_eq!(parser.attachments.len(), 1);
     let attachment = &parser.attachments[0];

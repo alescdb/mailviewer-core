@@ -25,7 +25,10 @@ use msg_parser::Outlook;
 
 use super::attachment::Attachment;
 use super::message::Message;
-use crate::message::message::{MessageParser, Protection};
+use crate::message::{
+  headers::Header,
+  message::{MessageParser, Protection},
+};
 
 #[derive(Debug, Default, Clone)]
 pub struct OutlookMessage {
@@ -37,6 +40,7 @@ pub struct OutlookMessage {
   pub body: Option<String>,
   pub html: Option<String>,
   pub attachments: Vec<Attachment>,
+  pub headers: Vec<Header>,
 }
 
 impl OutlookMessage {
@@ -50,6 +54,7 @@ impl OutlookMessage {
       body: None,
       html: None,
       attachments: vec![],
+      headers: vec![],
     }
   }
 
@@ -79,6 +84,42 @@ impl OutlookMessage {
     value.retain(|c| c != '\0');
     value
   }
+
+  fn parse_headers(outlook: &Outlook) -> Vec<super::headers::Header> {
+    Self::parse_raw_headers(&outlook.headers.raw)
+  }
+
+  fn parse_raw_headers(raw: &str) -> Vec<Header> {
+    let mut headers = Vec::new();
+    let mut current: Option<Header> = None;
+
+    for line in raw.lines() {
+      if line.starts_with([' ', '\t']) {
+        if let Some(header) = &mut current {
+          header.value.push(' ');
+          header.value.push_str(line.trim());
+        }
+        continue;
+      }
+
+      if let Some(header) = current.take() {
+        headers.push(header);
+      }
+
+      if let Some((name, value)) = line.split_once(':') {
+        current = Some(Header {
+          name: name.trim().to_string(),
+          value: Self::clean_string(value.trim().to_string()),
+        });
+      }
+    }
+
+    if let Some(header) = current {
+      headers.push(header);
+    }
+
+    headers
+  }
 }
 
 impl Message for OutlookMessage {
@@ -89,6 +130,7 @@ impl Message for OutlookMessage {
       cancellable.set_error_if_cancelled()?;
     }
 
+    self.headers = Self::parse_headers(&outlook);
     self.from = Self::clean_string(OutlookMessage::person_to_string(&outlook.sender));
     self.to = Self::clean_string(OutlookMessage::person_list_to_string(&outlook.to));
     self.subject = Self::clean_string(outlook.subject);
@@ -164,6 +206,10 @@ impl Message for OutlookMessage {
   fn body_text(&self) -> Option<String> {
     self.body.clone()
   }
+
+  fn headers(&self) -> Vec<super::headers::Header> {
+    self.headers.clone()
+  }
 }
 
 #[cfg(test)]
@@ -195,5 +241,24 @@ mod tests {
   #[test]
   fn clean_string_bytes() {
     assert_eq!(OutlookMessage::clean_string("a\0b\0c".to_string()), "abc");
+  }
+
+  #[test]
+  fn parse_transport_headers() {
+    assert_eq!(
+      OutlookMessage::parse_raw_headers(
+        "Subject: Test\r\nX-Long: first\r\n\tsecond\r\nInvalid\r\n"
+      ),
+      vec![
+        super::super::headers::Header {
+          name: "Subject".to_string(),
+          value: "Test".to_string(),
+        },
+        super::super::headers::Header {
+          name: "X-Long".to_string(),
+          value: "first second".to_string(),
+        },
+      ]
+    );
   }
 }

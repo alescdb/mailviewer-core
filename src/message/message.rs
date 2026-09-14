@@ -27,6 +27,7 @@ use uuid::Uuid;
 
 use super::attachment::Attachment;
 use crate::message::electronicmail::ElectronicMail;
+use crate::message::headers::Header;
 use crate::message::outlook::OutlookMessage;
 
 const EML_MIME_TYPES: [&str; 1] = ["message/rfc822"];
@@ -76,6 +77,7 @@ pub trait Message {
   fn body_html(&self) -> Option<String>;
   fn body_text(&self) -> Option<String>;
   fn protection(&self) -> Protection;
+  fn headers(&self) -> Vec<Header>;
 }
 
 #[derive(PartialEq, Debug)]
@@ -255,6 +257,10 @@ impl Message for MessageParser {
 
   fn protection(&self) -> Protection {
     self.parser.protection()
+  }
+
+  fn headers(&self) -> Vec<Header> {
+    self.parser.headers()
   }
 }
 
