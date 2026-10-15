@@ -322,7 +322,16 @@ impl ElectronicMail {
 
 impl super::message::Message for ElectronicMail {
   fn parse(&mut self, cancellable: Option<&gio::Cancellable>) -> Result<(), Box<dyn Error>> {
-    let stream = StreamMem::with_buffer(&self.data);
+    // The file is only needed while reading it, and it is the biggest thing
+    // here: a 13.7 MB message is 13.7 MB that would otherwise sit around for
+    // as long as the message stays open. Taken rather than borrowed, so it
+    // goes when this function returns.
+    let data = std::mem::take(&mut self.data);
+    if data.is_empty() {
+      return Err("nothing to read, this message was already parsed".into());
+    }
+
+    let stream = StreamMem::with_buffer(&data);
     let parser = Parser::with_stream(&stream);
     let message = parser.construct_message(None);
     let mut isok = false;
@@ -482,6 +491,23 @@ mod tests {
     let mut parser = ElectronicMail::new(fs::read(path).unwrap());
     parser.parse(None)?;
     Ok(parser.protection())
+  }
+
+  #[test]
+  fn does_not_keep_the_file_once_it_has_been_read() -> Result<(), Box<dyn Error>> {
+    let raw = fs::read("tests/html.eml").unwrap();
+    let mut parser = ElectronicMail::new(raw.clone());
+    parser.parse(None)?;
+
+    // What the message says is still there, the file it came from is not.
+    assert_eq!(parser.subject, "Lorem ipsum");
+    assert!(parser.body_html.is_some());
+    assert!(parser.data.is_empty(), "the file is still being held");
+
+    // And reading it a second time says so rather than looking empty.
+    assert!(parser.parse(None).is_err());
+
+    Ok(())
   }
 
   #[test]
